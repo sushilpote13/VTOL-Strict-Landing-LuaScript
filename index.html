@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VTOL Strict Landing — Lua Script Documentation</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c12;
+    --bg2: #0d1420;
+    --bg3: #111927;
+    --panel: #0f1c2e;
+    --accent: #00d4ff;
+    --accent2: #ff6b2b;
+    --accent3: #39ff6a;
+    --warn: #ffcc00;
+    --text: #c8dae8;
+    --text-dim: #5a7a9a;
+    --border: rgba(0,212,255,0.18);
+    --border2: rgba(255,107,43,0.25);
+    --glow: 0 0 18px rgba(0,212,255,0.35);
+    --glow2: 0 0 18px rgba(255,107,43,0.35);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    font-weight: 300;
+    line-height: 1.75;
+    overflow-x: hidden;
+  }
+
+  /* ─── SCANLINE OVERLAY ─── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.07) 3px,
+      rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* ─── HERO ─── */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 20px;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 40%, rgba(0,212,255,0.08) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 40% at 20% 80%, rgba(255,107,43,0.06) 0%, transparent 60%),
+      var(--bg);
+    overflow: hidden;
+  }
+
+  .hero-grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.06) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: grid-drift 20s linear infinite;
+  }
+
+  @keyframes grid-drift {
+    from { transform: translateY(0); }
+    to   { transform: translateY(60px); }
+  }
+
+  .drone-svg {
+    width: 200px;
+    height: 200px;
+    margin-bottom: 30px;
+    filter: drop-shadow(0 0 30px rgba(0,212,255,0.6));
+    animation: float 4s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%,100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-14px) rotate(1deg); }
+  }
+
+  .badge {
+    display: inline-block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 4px 14px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+    animation: pulse-border 2.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-border {
+    0%,100% { box-shadow: 0 0 6px rgba(0,212,255,0.3); }
+    50%      { box-shadow: 0 0 18px rgba(0,212,255,0.7); }
+  }
+
+  h1 {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: clamp(2.2rem, 6vw, 4.2rem);
+    color: #fff;
+    letter-spacing: 0.03em;
+    line-height: 1.1;
+    margin-bottom: 10px;
+    text-shadow: 0 0 40px rgba(0,212,255,0.5);
+  }
+
+  h1 span { color: var(--accent); }
+
+  .hero-sub {
+    font-size: 1.1rem;
+    color: var(--text-dim);
+    max-width: 620px;
+    margin: 16px auto 40px;
+    font-weight: 400;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 10px;
+    position: relative;
+  }
+
+  .stat {
+    background: rgba(0,212,255,0.06);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 22px;
+    text-align: center;
+    min-width: 120px;
+  }
+
+  .stat-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.5rem;
+    color: var(--accent);
+    display: block;
+  }
+
+  .stat-lbl {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+  }
+
+  /* ─── SECTIONS ─── */
+  .container {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+
+  section {
+    padding: 80px 0;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .section-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent2);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  h2 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 30px;
+    letter-spacing: 0.02em;
+    position: relative;
+    display: inline-block;
+  }
+
+  h2::after {
+    content: '';
+    position: absolute;
+    bottom: -6px; left: 0;
+    width: 100%; height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+
+  h3 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 30px 0 12px;
+  }
+
+  p { margin-bottom: 14px; font-weight: 300; }
+
+  /* ─── PANELS ─── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    position: relative;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    border-radius: 6px 6px 0 0;
+  }
+
+  .panel.orange::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .panel.green::before  { background: linear-gradient(90deg, var(--accent3), transparent); }
+  .panel.warn::before   { background: linear-gradient(90deg, var(--warn), transparent); }
+
+  /* ─── CODE BLOCK ─── */
+  pre {
+    background: #040810;
+    border: 1px solid rgba(0,212,255,0.12);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 20px 24px;
+    overflow-x: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    line-height: 1.65;
+    color: #8cc8e0;
+    margin: 16px 0;
+  }
+
+  .kw  { color: #ff6b9d; }
+  .fn  { color: #00d4ff; }
+  .str { color: #39ff6a; }
+  .cmt { color: #3d5a6a; }
+  .num { color: #ffcc00; }
+  .var { color: #ffaa44; }
+
+  /* ─── GRID CARDS ─── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+    margin: 24px 0;
+  }
+
+  .card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 22px;
+    transition: all 0.25s;
+  }
+
+  .card:hover {
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+    transform: translateY(-3px);
+  }
+
+  .card-icon {
+    font-size: 2rem;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .card h4 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .card p { font-size: 0.88rem; color: var(--text-dim); margin: 0; }
+
+  /* ─── PHASE DIAGRAM ─── */
+  .phase-diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 30px 0;
+    position: relative;
+  }
+
+  .phase-diagram::before {
+    content: '';
+    position: absolute;
+    left: 50px; top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--accent), var(--accent2));
+  }
+
+  .phase-block {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    margin-bottom: 0;
+  }
+
+  .phase-dot {
+    width: 100px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 6px;
+  }
+
+  .phase-circle {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 2px solid var(--accent);
+    box-shadow: var(--glow);
+    z-index: 1;
+  }
+
+  .phase-circle.orange { border-color: var(--accent2); box-shadow: var(--glow2); }
+
+  .phase-alt {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 5px;
+    text-align: center;
+  }
+
+  .phase-content {
+    flex: 1;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+
+  .phase-content h4 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .phase-content.blue h4 { color: var(--accent); }
+  .phase-content.orange h4 { color: var(--accent2); }
+
+  .phase-content ul { padding-left: 18px; font-size: 0.88rem; }
+  .phase-content li { margin-bottom: 4px; }
+
+  /* ─── FLOW TREE ─── */
+  .flow-tree {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    background: #040810;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px 28px;
+    line-height: 2;
+    margin: 20px 0;
+    overflow-x: auto;
+  }
+
+  .ft-root { color: var(--accent); font-size: 0.92rem; font-weight: bold; }
+  .ft-yes  { color: var(--accent3); }
+  .ft-no   { color: var(--accent2); }
+  .ft-act  { color: var(--warn); }
+  .ft-dim  { color: var(--text-dim); }
+
+  /* ─── PARAM TABLE ─── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 0.88rem;
+  }
+
+  th {
+    background: rgba(0,212,255,0.1);
+    color: var(--accent);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--text);
+  }
+
+  tr:hover td { background: rgba(0,212,255,0.04); }
+  td:first-child { color: var(--accent2); }
+  td:nth-child(2) { color: var(--warn); }
+
+  /* ─── STEP LIST ─── */
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+
+  .steps li {
+    counter-increment: step;
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    margin-bottom: 18px;
+  }
+
+  .steps li::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    color: var(--accent);
+    background: rgba(0,212,255,0.1);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    flex-shrink: 0;
+    line-height: 1.4;
+  }
+
+  .steps li .step-body { flex: 1; }
+  .steps li strong { color: #fff; font-weight: 600; display: block; margin-bottom: 4px; }
+  .steps li span { font-size: 0.88rem; color: var(--text-dim); }
+
+  /* ─── ALERT BOX ─── */
+  .alert {
+    border-left: 3px solid var(--warn);
+    background: rgba(255,204,0,0.06);
+    padding: 14px 18px;
+    border-radius: 0 4px 4px 0;
+    margin: 16px 0;
+    font-size: 0.9rem;
+  }
+
+  .alert strong { color: var(--warn); }
+
+  /* ─── SKILL TAGS ─── */
+  .skill-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .skill-tag {
+    background: rgba(57,255,106,0.08);
+    border: 1px solid rgba(57,255,106,0.3);
+    color: var(--accent3);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    padding: 6px 14px;
+    border-radius: 20px;
+    letter-spacing: 0.06em;
+    transition: all 0.2s;
+  }
+
+  .skill-tag:hover {
+    background: rgba(57,255,106,0.2);
+    box-shadow: 0 0 12px rgba(57,255,106,0.3);
+  }
+
+  /* ─── BAR CHART ─── */
+  .bar-chart { margin: 24px 0; }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+
+  .bar-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    width: 200px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 10px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 5px;
+    animation: bar-in 1.2s ease-out forwards;
+    transform-origin: left;
+  }
+
+  @keyframes bar-in {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+
+  .bar-pct {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    width: 38px;
+  }
+
+  /* ─── TIMELINE ─── */
+  .timeline { position: relative; padding-left: 30px; margin: 24px 0; }
+  .timeline::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(to bottom, var(--accent), var(--accent2), var(--accent3));
+  }
+
+  .tl-item {
+    position: relative;
+    margin-bottom: 28px;
+    padding-left: 24px;
+  }
+
+  .tl-item::before {
+    content: '';
+    position: absolute; left: -35px; top: 6px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 10px var(--accent);
+  }
+
+  .tl-item:nth-child(2)::before { background: var(--accent2); box-shadow: 0 0 10px var(--accent2); }
+  .tl-item:nth-child(3)::before { background: var(--warn); box-shadow: 0 0 10px var(--warn); }
+  .tl-item:nth-child(4)::before { background: var(--accent3); box-shadow: 0 0 10px var(--accent3); }
+  .tl-item:nth-child(5)::before { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+
+  .tl-item h4 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+
+  .tl-item p { font-size: 0.88rem; color: var(--text-dim); margin: 0; }
+
+  /* ─── SVG CHART ─── */
+  .chart-wrap {
+    background: #040810;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px;
+    margin: 20px 0;
+  }
+
+  .chart-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 16px;
+  }
+
+  /* ─── FOOTER ─── */
+  footer {
+    text-align: center;
+    padding: 50px 20px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+
+  footer span { color: var(--accent); }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 600px) {
+    .card-grid { grid-template-columns: 1fr; }
+    .bar-label { width: 130px; font-size: 0.7rem; }
+    pre { font-size: 0.72rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ HERO ══════════════ -->
+<div class="hero">
+  <div class="hero-grid"></div>
+
+  <!-- Animated Drone SVG -->
+  <svg class="drone-svg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Propeller arms -->
+    <line x1="100" y1="100" x2="40" y2="40"  stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+    <line x1="100" y1="100" x2="160" y2="40" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+    <line x1="100" y1="100" x2="40" y2="160" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+    <line x1="100" y1="100" x2="160" y2="160" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+    <!-- Motor hubs -->
+    <circle cx="40"  cy="40"  r="12" fill="#0d1420" stroke="#00d4ff" stroke-width="2"/>
+    <circle cx="160" cy="40"  r="12" fill="#0d1420" stroke="#00d4ff" stroke-width="2"/>
+    <circle cx="40"  cy="160" r="12" fill="#0d1420" stroke="#ff6b2b" stroke-width="2"/>
+    <circle cx="160" cy="160" r="12" fill="#0d1420" stroke="#ff6b2b" stroke-width="2"/>
+    <!-- Spinning blur rings -->
+    <circle cx="40"  cy="40"  r="22" stroke="#00d4ff" stroke-width="1" stroke-dasharray="4 4" opacity="0.5">
+      <animateTransform attributeName="transform" type="rotate" from="0 40 40" to="360 40 40" dur="0.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="160" cy="40"  r="22" stroke="#00d4ff" stroke-width="1" stroke-dasharray="4 4" opacity="0.5">
+      <animateTransform attributeName="transform" type="rotate" from="360 160 40" to="0 160 40" dur="0.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="40"  cy="160" r="22" stroke="#ff6b2b" stroke-width="1" stroke-dasharray="4 4" opacity="0.5">
+      <animateTransform attributeName="transform" type="rotate" from="360 40 160" to="0 40 160" dur="0.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="160" cy="160" r="22" stroke="#ff6b2b" stroke-width="1" stroke-dasharray="4 4" opacity="0.5">
+      <animateTransform attributeName="transform" type="rotate" from="0 160 160" to="360 160 160" dur="0.8s" repeatCount="indefinite"/>
+    </circle>
+    <!-- Body -->
+    <rect x="84" y="84" width="32" height="32" rx="6" fill="#0d1420" stroke="#00d4ff" stroke-width="2"/>
+    <circle cx="100" cy="100" r="6" fill="#00d4ff" opacity="0.8"/>
+    <!-- Landing target below -->
+    <circle cx="100" cy="175" r="14" stroke="#39ff6a" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.7">
+      <animate attributeName="r" values="14;18;14" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.7;0.3;0.7" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="100" cy="175" r="4" fill="#39ff6a" opacity="0.9"/>
+    <!-- Vertical descent beam -->
+    <line x1="100" y1="116" x2="100" y2="159" stroke="#39ff6a" stroke-width="1" stroke-dasharray="3 3">
+      <animate attributeName="opacity" values="1;0.2;1" dur="1s" repeatCount="indefinite"/>
+    </line>
+  </svg>
+
+  <div class="badge">ArduPilot ✦ Lua Script ✦ QuadPlane</div>
+  <h1>VTOL <span>Strict</span> Landing</h1>
+  <p class="hero-sub">A precision landing Lua script for QuadPlane that enforces a two-phase descent — freezing altitude below 7 m until the aircraft is centred within 35 cm of the target marker.</p>
+
+  <div class="stat-row">
+    <div class="stat"><span class="stat-val">7m</span><span class="stat-lbl">Phase Threshold</span></div>
+    <div class="stat"><span class="stat-val">35cm</span><span class="stat-lbl">Descent Radius</span></div>
+    <div class="stat"><span class="stat-val">10 Hz</span><span class="stat-lbl">Loop Rate</span></div>
+    <div class="stat"><span class="stat-val">100%</span><span class="stat-lbl">Lua-only</span></div>
+    <div class="stat"><span class="stat-val">0</span><span class="stat-lbl">Drift Allowed</span></div>
+  </div>
+</div>
+
+<!-- ══════════════ WHAT IS THIS? ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 01 — overview</div>
+    <h2>What Is This Script?</h2>
+
+    <p>This is a <strong style="color:#fff">custom ArduPilot Lua script</strong> that adds intelligent, two-phase precision landing behaviour to a QuadPlane VTOL. Instead of relying on ArduPilot's built-in precision landing (which can drift and land slightly off-target), this script takes direct control of the descent rate and waypoint targeting to guarantee that the aircraft only descends when it is properly centred over the landing pad.</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <span class="card-icon">🎯</span>
+        <h4>Precision Targeting</h4>
+        <p>Uses a downward-facing vision sensor (IR lock / camera) to continuously calculate the distance from the landing pad and correct the flight path.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">🔒</span>
+        <h4>Altitude Lock</h4>
+        <p>Below 7 m, the aircraft freezes its altitude entirely if the target is lost or if XY offset exceeds 35 cm — eliminating off-target touchdowns.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">📡</span>
+        <h4>Live GCS Feedback</h4>
+        <p>Sends human-readable status messages to Mission Planner / QGroundControl at every decision point so operators know exactly what the script is doing.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">⚙️</span>
+        <h4>Configurable Params</h4>
+        <p>Key values (XY gain, descent radius, hold-on-lost) are exposed as ArduPilot parameters — tunable without editing the Lua source code.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">🛡️</span>
+        <h4>Fault-Tolerant Loop</h4>
+        <p>A <code>pcall</code> wrapper catches any Lua runtime errors and logs them, ensuring the script never crashes silently or hangs the vehicle.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">🔀</span>
+        <h4>Dual-Mode: QLAND + LOITER</h4>
+        <p>Works automatically during QLAND and optionally activates during QLOITER when a dedicated RC aux switch is flipped to the high position.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ WHERE IT IS USED ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 02 — use cases</div>
+    <h2>Where Is It Used?</h2>
+
+    <p>This script is designed for any <strong style="color:#fff">QuadPlane (VTOL) aircraft</strong> running ArduPilot Plane firmware that needs to land on a specific, known point with high accuracy. Common real-world applications include:</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <span class="card-icon">🚁</span>
+        <h4>Delivery Drones</h4>
+        <p>Land on a marked pad at a customer location rather than drifting onto grass, obstacles, or an incorrect spot.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">🚢</span>
+        <h4>Ship / Vehicle Deck Landing</h4>
+        <p>Target a moving or stationary deck marker for safe recovery operations where surrounding space is limited.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">🔋</span>
+        <h4>Autonomous Charging Pads</h4>
+        <p>Must connect to charging pins accurately — a few centimetres of error means a failed charge cycle.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">🔬</span>
+        <h4>Research / Survey</h4>
+        <p>Repeatability matters — land on the exact same GCP marker between flights to maintain consistent data collection baselines.</p>
+      </div>
+    </div>
+
+    <div class="alert">
+      <strong>⚠ Hardware Requirement:</strong> The aircraft must have a downward-facing precision landing sensor (IR-Lock, OpenMV, or similar) connected to the flight controller and configured via <code>PLND_TYPE</code>. Without this, the script has no target to track.
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ PREREQUISITES ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 03 — prerequisites</div>
+    <h2>Prerequisites</h2>
+
+    <div class="panel">
+      <h3>🖥 Firmware</h3>
+      <ul style="padding-left:18px; font-size:0.9rem; line-height:2;">
+        <li>ArduPilot Plane <strong style="color:#fff">4.3 or later</strong> (Lua scripting API must be available)</li>
+        <li>Vehicle type: <strong style="color:#fff">QuadPlane</strong> (frame class 10 / 13 / etc.)</li>
+        <li><code>SCR_ENABLE = 1</code> — enable the scripting engine</li>
+        <li><code>SCR_HEAP_SIZE</code> — ensure at least 100 KB of heap for scripts</li>
+        <li><code>PLND_ENABLED = 1</code> — precision landing subsystem active</li>
+        <li><code>PLND_TYPE</code> — set to match your sensor (1 = companion, 3 = IR Lock, etc.)</li>
+      </ul>
+    </div>
+
+    <div class="panel orange">
+      <h3>🔧 Hardware Required</h3>
+      <ul style="padding-left:18px; font-size:0.9rem; line-height:2;">
+        <li><strong style="color:#fff">Flight Controller:</strong> Pixhawk 4 / 6C / Cube Orange or any ArduPilot-compatible FC</li>
+        <li><strong style="color:#fff">Precision Landing Sensor:</strong> IR-Lock + IR Beacon, or monocular camera with ArUco/AprilTag</li>
+        <li><strong style="color:#fff">MicroSD Card:</strong> Required — scripts are loaded from <code>/APM/scripts/</code></li>
+        <li><strong style="color:#fff">RC Transmitter:</strong> One spare channel for the PRECLOITER aux switch (CH6–CH12)</li>
+        <li><strong style="color:#fff">Landing Pad:</strong> IR-reflective beacon or printed AprilTag marker (size depends on AGL height)</li>
+      </ul>
+    </div>
+
+    <div class="panel green">
+      <h3>📦 Software / Tools</h3>
+      <ul style="padding-left:18px; font-size:0.9rem; line-height:2;">
+        <li>Mission Planner 1.3.80+ or QGroundControl (for parameter setup and GCS messages)</li>
+        <li>ArduPilot Lua scripting API documentation (for future modifications)</li>
+        <li>A text editor (VS Code recommended) to read/modify the <code>.lua</code> file</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ HARDWARE CONNECTIONS ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 04 — hardware connections</div>
+    <h2>Hardware Connections</h2>
+
+    <p>The diagram below shows how the key components connect to the Pixhawk flight controller:</p>
+
+    <!-- SVG Connection Diagram -->
+    <div class="chart-wrap">
+      <div class="chart-title">// System Connection Diagram</div>
+      <svg viewBox="0 0 800 340" width="100%" font-family="Share Tech Mono, monospace" font-size="11">
+
+        <!-- Pixhawk Centre Box -->
+        <rect x="300" y="120" width="200" height="100" rx="6" fill="#0d1420" stroke="#00d4ff" stroke-width="2"/>
+        <text x="400" y="148" fill="#00d4ff" text-anchor="middle" font-size="13" font-weight="bold">PIXHAWK FC</text>
+        <text x="400" y="167" fill="#5a7a9a" text-anchor="middle">ArduPilot Plane</text>
+        <text x="400" y="184" fill="#5a7a9a" text-anchor="middle">QuadPlane</text>
+        <text x="400" y="202" fill="#ffcc00" text-anchor="middle" font-size="10">SCR_ENABLE=1</text>
+
+        <!-- SD Card -->
+        <rect x="340" y="50" width="120" height="40" rx="4" fill="#0d1420" stroke="#39ff6a" stroke-width="1.5"/>
+        <text x="400" y="67" fill="#39ff6a" text-anchor="middle">MicroSD Card</text>
+        <text x="400" y="81" fill="#5a7a9a" text-anchor="middle">/APM/scripts/</text>
+        <line x1="400" y1="90" x2="400" y2="120" stroke="#39ff6a" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <polygon points="400,120 395,110 405,110" fill="#39ff6a"/>
+
+        <!-- IR Lock Sensor -->
+        <rect x="30" y="130" width="150" height="50" rx="4" fill="#0d1420" stroke="#ff6b2b" stroke-width="1.5"/>
+        <text x="105" y="151" fill="#ff6b2b" text-anchor="middle">IR-Lock Sensor</text>
+        <text x="105" y="168" fill="#5a7a9a" text-anchor="middle">UART / I2C</text>
+        <line x1="180" y1="155" x2="300" y2="162" stroke="#ff6b2b" stroke-width="1.5" stroke-dasharray="5 3"/>
+        <polygon points="300,162 288,157 290,167" fill="#ff6b2b"/>
+
+        <!-- RC Receiver -->
+        <rect x="30" y="220" width="150" height="50" rx="4" fill="#0d1420" stroke="#00d4ff" stroke-width="1.5"/>
+        <text x="105" y="241" fill="#00d4ff" text-anchor="middle">RC Receiver</text>
+        <text x="105" y="258" fill="#5a7a9a" text-anchor="middle">AUX CH (PWM)</text>
+        <line x1="180" y1="245" x2="300" y2="210" stroke="#00d4ff" stroke-width="1.5" stroke-dasharray="5 3"/>
+        <polygon points="300,210 289,204 292,214" fill="#00d4ff"/>
+
+        <!-- GCS -->
+        <rect x="620" y="130" width="150" height="50" rx="4" fill="#0d1420" stroke="#8888ff" stroke-width="1.5"/>
+        <text x="695" y="151" fill="#8888ff" text-anchor="middle">Mission Planner</text>
+        <text x="695" y="168" fill="#5a7a9a" text-anchor="middle">MAVLink / UDP</text>
+        <line x1="500" y1="162" x2="620" y2="155" stroke="#8888ff" stroke-width="1.5" stroke-dasharray="5 3"/>
+        <polygon points="620,155 609,150 611,160" fill="#8888ff"/>
+
+        <!-- Motors -->
+        <rect x="620" y="220" width="150" height="50" rx="4" fill="#0d1420" stroke="#ffcc00" stroke-width="1.5"/>
+        <text x="695" y="241" fill="#ffcc00" text-anchor="middle">4× VTOL Motors</text>
+        <text x="695" y="258" fill="#5a7a9a" text-anchor="middle">ESC / PWM</text>
+        <line x1="500" y1="185" x2="620" y2="230" stroke="#ffcc00" stroke-width="1.5" stroke-dasharray="5 3"/>
+        <polygon points="620,230 610,220 620,218" fill="#ffcc00"/>
+
+        <!-- IR Beacon (ground) -->
+        <rect x="340" y="280" width="120" height="40" rx="4" fill="#0d1420" stroke="#39ff6a" stroke-width="1.5"/>
+        <text x="400" y="298" fill="#39ff6a" text-anchor="middle">IR Beacon / Pad</text>
+        <text x="400" y="312" fill="#5a7a9a" text-anchor="middle">Ground Target</text>
+        <line x1="400" y1="280" x2="400" y2="220" stroke="#39ff6a" stroke-width="1.5" stroke-dasharray="3 4" opacity="0.5"/>
+
+        <!-- Labels -->
+        <text x="210" y="148" fill="#ff6b2b" font-size="9">PLND_TYPE</text>
+        <text x="210" y="230" fill="#00d4ff" font-size="9">AUX_PRECLOITER=39</text>
+        <text x="510" y="148" fill="#8888ff" font-size="9">MAVLink msgs</text>
+        <text x="510" y="225" fill="#ffcc00" font-size="9">descent_rate ctrl</text>
+      </svg>
+    </div>
+
+    <h3>RC Aux Channel Setup</h3>
+    <p>Set one of your RC channels (e.g. CH7) in Mission Planner as follows:</p>
+    <pre><span class="cmt">-- Mission Planner → Config → Extended Tuning</span>
+<span class="var">RC7_OPTION</span> = <span class="num">39</span>   <span class="cmt">-- AUX function 39 = Precision Loiter</span>
+
+<span class="cmt">-- Switch positions:</span>
+<span class="cmt">--  LOW  (PWM &lt;1200) → PRECLOITER OFF</span>
+<span class="cmt">--  HIGH (PWM &gt;1800) → PRECLOITER ON  (activates in QLOITER mode)</span></pre>
+  </div>
+</section>
+
+<!-- ══════════════ INSTALLATION ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 05 — installation</div>
+    <h2>How to Install</h2>
+
+    <ol class="steps">
+      <li>
+        <div class="step-body">
+          <strong>Enable Lua Scripting on the Flight Controller</strong>
+          <span>In Mission Planner, go to Config → Full Parameter List. Set <code>SCR_ENABLE = 1</code> and reboot the FC. Also set <code>SCR_HEAP_SIZE = 131072</code> (128 KB) to give scripts enough memory.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <strong>Configure Precision Landing Parameters</strong>
+          <span>Set <code>PLND_ENABLED = 1</code> and <code>PLND_TYPE</code> to match your sensor. For IR-Lock use <code>PLND_TYPE = 3</code>. Reboot after changes.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <strong>Copy the Script to the SD Card</strong>
+          <span>Remove the SD card from your Pixhawk (or connect via USB mass storage). Navigate to <code>/APM/scripts/</code> — create the folder if it doesn't exist. Copy <code>vtol_strict_landing.lua</code> into that folder.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <strong>Re-insert the SD Card and Power On</strong>
+          <span>On boot, ArduPilot will automatically discover and load all <code>.lua</code> files in <code>/APM/scripts/</code>. Watch the GCS messages — you should see: <code>PLND: UPDATED 7m LOGIC LOADED</code>.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <strong>Verify Script Parameters Appear</strong>
+          <span>After the first boot with the script, new parameters prefixed <code>PLND_</code> will appear in the parameter list. Confirm <code>PLND_XY_GAIN</code>, <code>PLND_DESCENT_RAD</code>, and <code>PLND_LOST_HOLD</code> are present.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <strong>Set the Aux RC Channel</strong>
+          <span>Assign your PRECLOITER switch channel to option <code>39</code> (e.g. <code>RC7_OPTION = 39</code>). Test that toggling the switch sends HIGH/LOW correctly by watching GCS messages in QLOITER mode.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <strong>Bench-Test Target Detection</strong>
+          <span>Hold the aircraft over the landing beacon on a bench. Check that GCS shows <code>PLND: TARGET ACQUIRED</code>. Move away and verify <code>PLND: TARGET LOST</code>.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <strong>Fly a Low-Risk Test</strong>
+          <span>In a safe open area, command a QLAND from 15 m above the beacon. Observe the two-phase behaviour: free descent above 7 m, then strict altitude-hold and centering below 7 m. Verify touchdown is within ≈35 cm.</span>
+        </div>
+      </li>
+    </ol>
+
+    <div class="alert">
+      <strong>📁 File Path:</strong> The script must be placed at exactly <code>/APM/scripts/vtol_strict_landing.lua</code> on the SD card. Any subdirectory will be ignored by the ArduPilot scripting engine.
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ HOW IT WORKS ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 06 — logic deep-dive</div>
+    <h2>How It Works</h2>
+
+    <p>The script runs a <strong style="color:#fff">protected update loop at 10 Hz</strong> (every 100 ms). On each tick it reads altitude, checks whether a precision target is visible, and applies one of two rule-sets depending on which phase the aircraft is in.</p>
+
+    <!-- Two-Phase Diagram -->
+    <div class="phase-diagram">
+
+      <div class="phase-block">
+        <div class="phase-dot">
+          <div class="phase-circle"></div>
+          <div class="phase-alt">↑ above 7m</div>
+        </div>
+        <div class="phase-content blue">
+          <h4>☁ Phase 1 — Approach (Above 7 m)</h4>
+          <ul>
+            <li>If target is visible → steer toward it using <code>PLND_XY_GAIN</code> amplification on the next waypoint location</li>
+            <li>Normal descent rate is allowed (<code>Q_LAND_FINAL_SPD</code>)</li>
+            <li>If target is lost → just descend normally, no override</li>
+            <li>GCS reports <code>ALT: X.XXm | TRACKING TARGET (&gt;7m)</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="phase-block">
+        <div class="phase-dot">
+          <div class="phase-circle orange"></div>
+          <div class="phase-alt">↓ below 7m</div>
+        </div>
+        <div class="phase-content orange">
+          <h4>🔒 Phase 2 — Strict Precision (Below 7 m)</h4>
+          <ul>
+            <li>XY correction is applied every tick regardless</li>
+            <li><strong>Descent ONLY if</strong> <code>xy_dist ≤ PLND_DESCENT_RADIUS</code> (default 35 cm)</li>
+            <li><strong>If target lost</strong> → <code>set_land_descent_rate(0)</code> — altitude frozen</li>
+            <li><strong>If XY offset &gt; 35 cm</strong> → <code>set_land_descent_rate(0)</code> — altitude frozen</li>
+            <li>GCS reports centred/hold status every tick</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Decision Flow Tree -->
+    <h3>Decision Flow — Per Tick</h3>
+    <div class="flow-tree">
+<span class="ft-root">update() called @ 10 Hz</span>
+│
+├── <span class="ft-dim">PLND_ENABLED &lt; 1?</span>  <span class="ft-no">→ ABORT (disabled)</span>
+│
+├── <span class="ft-dim">precision_landing_active()?</span>
+│     ├── <span class="ft-no">NO → return (wrong mode / switch off)</span>
+│     └── <span class="ft-yes">YES ↓</span>
+│
+├── <span class="ft-dim">get altitude (AHRS NED)</span>
+│
+├── <span class="ft-dim">update_target()  [check precland:target_acquired()]</span>
+│     ├── <span class="ft-yes">acquired → last_seen_time = now</span>
+│     └── <span class="ft-dim">have_target = (now - last_seen_time) &lt; 500ms</span>
+│
+├── <span class="ft-dim">current_alt &gt; 7.0m ?</span>
+│     ├── <span class="ft-yes">YES — PHASE 1</span>
+│     │     ├── have_target? <span class="ft-yes">YES → steer toward target (gain applied)</span>
+│     │     │                <span class="ft-no">NO  → no override</span>
+│     │     └── <span class="ft-act">set_land_descent_rate(Q_LAND_FINAL_SPD)  → RETURN</span>
+│     │
+│     └── <span class="ft-no">NO — PHASE 2 (strict)</span>
+│           ├── have_target? <span class="ft-no">NO → set_descent_rate(0)  HOLD ALT → RETURN</span>
+│           │
+│           ├── get target XY location
+│           ├── compute xy_dist to target
+│           ├── apply XY correction to next_WP (always)
+│           │
+│           └── xy_dist ≤ 0.35m?
+│                 ├── <span class="ft-yes">YES → set_descent_rate(Q_LAND_FINAL_SPD)  DESCEND</span>
+│                 └── <span class="ft-no">NO  → set_descent_rate(0)  HOLD ALT</span>
+    </div>
+
+    <!-- Code Highlight Section -->
+    <h3>Key Code — Phase 2 Descent Gate</h3>
+    <pre><span class="cmt">-- Below 7m: only descend when centred</span>
+<span class="kw">if</span> xy_dist &lt;= PLND_DESCENT_RADIUS:<span class="fn">get</span>() <span class="kw">then</span>
+
+    vehicle:<span class="fn">set_land_descent_rate</span>(Q_LAND_FINAL_SPD:<span class="fn">get</span>())
+
+    gcs:<span class="fn">send_text</span>(MAV_SEVERITY.INFO,
+        <span class="str">"PLND: CENTERED - DESCENT ENABLED (&lt;7m)"</span>)
+<span class="kw">else</span>
+    vehicle:<span class="fn">set_land_descent_rate</span>(<span class="num">0</span>)   <span class="cmt">-- altitude frozen</span>
+
+    gcs:<span class="fn">send_text</span>(MAV_SEVERITY.INFO,
+        string.<span class="fn">format</span>(<span class="str">"PLND: HOLD ALT (XY=%.2fm &lt;7m)"</span>, xy_dist))
+<span class="kw">end</span></pre>
+
+    <!-- Altitude vs State Chart -->
+    <h3>Altitude vs Behaviour — Visual Timeline</h3>
+    <div class="chart-wrap">
+      <div class="chart-title">// Typical landing sequence — altitude over time</div>
+      <svg viewBox="0 0 700 220" width="100%" font-family="Share Tech Mono, monospace" font-size="10">
+
+        <!-- Axes -->
+        <line x1="60" y1="20" x2="60" y2="185" stroke="#3d5a6a" stroke-width="1"/>
+        <line x1="60" y1="185" x2="660" y2="185" stroke="#3d5a6a" stroke-width="1"/>
+
+        <!-- Y-axis labels (altitude) -->
+        <text x="50" y="188" fill="#3d5a6a" text-anchor="end">0m</text>
+        <text x="50" y="148" fill="#3d5a6a" text-anchor="end">5m</text>
+        <text x="50" y="108" fill="#ffcc00" text-anchor="end">7m</text>
+        <text x="50" y="68" fill="#3d5a6a" text-anchor="end">12m</text>
+        <text x="50" y="28" fill="#3d5a6a" text-anchor="end">16m</text>
+
+        <!-- 7m threshold line -->
+        <line x1="60" y1="108" x2="660" y2="108" stroke="#ffcc00" stroke-width="1" stroke-dasharray="6 4" opacity="0.5"/>
+        <text x="665" y="111" fill="#ffcc00" font-size="9">7m threshold</text>
+
+        <!-- Phase background shading -->
+        <rect x="60" y="20" width="600" height="88" fill="rgba(0,212,255,0.04)" rx="2"/>
+        <rect x="60" y="108" width="600" height="77" fill="rgba(255,107,43,0.05)" rx="2"/>
+        <text x="300" y="38" fill="rgba(0,212,255,0.5)" text-anchor="middle" font-size="9">PHASE 1 — FREE APPROACH</text>
+        <text x="300" y="125" fill="rgba(255,107,43,0.5)" text-anchor="middle" font-size="9">PHASE 2 — STRICT PRECISION</text>
+
+        <!-- Altitude curve -->
+        <!-- Smooth descent → hold → descent to 0 -->
+        <polyline
+          points="
+            70,28
+            150,48
+            230,75
+            310,108
+            360,108
+            380,115
+            400,108
+            430,108
+            460,130
+            490,150
+            530,160
+            570,170
+            610,178
+            640,185
+          "
+          stroke="#00d4ff"
+          stroke-width="2.5"
+          fill="none"
+          stroke-linejoin="round"/>
+
+        <!-- Hold sections (flat) highlighted -->
+        <polyline points="310,108 360,108" stroke="#ffcc00" stroke-width="3" fill="none"/>
+        <polyline points="400,108 430,108" stroke="#ffcc00" stroke-width="3" fill="none"/>
+
+        <!-- Annotations -->
+        <circle cx="310" cy="108" r="4" fill="#ffcc00"/>
+        <text x="310" y="100" fill="#ffcc00" text-anchor="middle" font-size="9">enters Phase 2</text>
+
+        <circle cx="360" cy="108" r="4" fill="#ff6b2b"/>
+        <text x="360" y="100" fill="#ff6b2b" text-anchor="middle" font-size="9">target lost</text>
+        <text x="360" y="92" fill="#ff6b2b" text-anchor="middle" font-size="9">→ HOLD</text>
+
+        <circle cx="400" cy="108" r="4" fill="#39ff6a"/>
+        <text x="400" y="100" fill="#39ff6a" text-anchor="middle" font-size="9">target reacquired</text>
+
+        <circle cx="430" cy="108" r="4" fill="#00d4ff"/>
+        <text x="430" y="100" fill="#00d4ff" text-anchor="middle" font-size="9">centered</text>
+        <text x="430" y="92" fill="#00d4ff" text-anchor="middle" font-size="9">→ DESCEND</text>
+
+        <circle cx="640" cy="185" r="4" fill="#39ff6a"/>
+        <text x="640" y="178" fill="#39ff6a" text-anchor="middle" font-size="9">TOUCHDOWN</text>
+
+        <!-- X-axis label -->
+        <text x="360" y="200" fill="#3d5a6a" text-anchor="middle" font-size="9">Time →</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ PARAMETERS ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 07 — parameters</div>
+    <h2>Configurable Parameters</h2>
+
+    <p>After the first boot with the script loaded, these parameters appear in Mission Planner's Full Parameter List and can be adjusted without touching the code:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Parameter</th>
+          <th>Default</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>PLND_XY_GAIN</td><td>2.5</td><td>Amplifies the XY steering correction. Higher = more aggressive steering toward target. Reduce if oscillating.</td></tr>
+        <tr><td>PLND_DESCENT_RAD</td><td>0.35 m</td><td>Maximum XY distance from target allowed before descent is permitted in Phase 2. Tighten for higher precision.</td></tr>
+        <tr><td>PLND_LOST_HOLD</td><td>1</td><td>Set to 1: freeze altitude when target is lost below 7 m. Set to 0: continue descending even if lost.</td></tr>
+        <tr><td>PLND_ENABLED</td><td>(from PLND)</td><td>Master on/off. If 0, the script exits immediately on load and does nothing.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="alert">
+      <strong>💡 Tuning Tip:</strong> If the aircraft oscillates around the target instead of converging, lower <code>PLND_XY_GAIN</code> from 2.5 to 1.5. If it's slow to converge, increase to 3.0. Never exceed 4.0 — it may cause overcorrection loops.
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ GCS MESSAGES ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 08 — gcs messages reference</div>
+    <h2>GCS Messages Reference</h2>
+
+    <p>Every state transition is logged to the GCS with a severity level. Here's what each message means:</p>
+
+    <table>
+      <thead>
+        <tr><th>Message</th><th>Severity</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PLND: UPDATED 7m LOGIC LOADED</td><td>INFO</td><td>Script loaded and running successfully on boot.</td></tr>
+        <tr><td>PLND: Disabled</td><td>INFO</td><td>PLND_ENABLED = 0; script is dormant.</td></tr>
+        <tr><td>PLND: TARGET ACQUIRED</td><td>INFO</td><td>Sensor has locked onto the landing beacon.</td></tr>
+        <tr><td>PLND: TARGET LOST</td><td>WARNING</td><td>Beacon not seen for &gt;500 ms. In Phase 2 this triggers a hold.</td></tr>
+        <tr><td>PLND: HOLD ALT (TARGET LOST &lt;7m)</td><td>WARNING</td><td>Below threshold, target gone — altitude frozen for safety.</td></tr>
+        <tr><td>PLND: CENTERED - DESCENT ENABLED (&lt;7m)</td><td>INFO</td><td>XY offset ≤ 35 cm — descent is now active.</td></tr>
+        <tr><td>PLND: HOLD ALT (XY=X.XXm &lt;7m)</td><td>INFO</td><td>Too far from centre — shows current offset distance.</td></tr>
+        <tr><td>PLND: PRECLOITER ENABLED/DISABLED</td><td>INFO</td><td>RC aux switch toggled.</td></tr>
+        <tr><td>PLND ERROR: &lt;message&gt;</td><td>ERROR</td><td>Lua runtime exception caught — script continues running.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════ SKILLS LEARNED ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 09 — skills developed</div>
+    <h2>Skills Developed</h2>
+
+    <p>Building this script from scratch required working across multiple technical domains simultaneously — from embedded systems programming to control theory and real-time safety architecture.</p>
+
+    <div class="skill-grid">
+      <div class="skill-tag">Lua Programming</div>
+      <div class="skill-tag">ArduPilot Scripting API</div>
+      <div class="skill-tag">VTOL Flight Dynamics</div>
+      <div class="skill-tag">Precision Landing Systems</div>
+      <div class="skill-tag">Control Loop Design</div>
+      <div class="skill-tag">State Machine Architecture</div>
+      <div class="skill-tag">MAVLink Protocol</div>
+      <div class="skill-tag">Sensor Fusion Concepts</div>
+      <div class="skill-tag">RC Aux Channel Handling</div>
+      <div class="skill-tag">Parameter Table Management</div>
+      <div class="skill-tag">Error-Tolerant Embedded Code</div>
+      <div class="skill-tag">Real-Time Safety Systems</div>
+      <div class="skill-tag">GCS Telemetry Design</div>
+      <div class="skill-tag">Coordinate Systems (NED)</div>
+      <div class="skill-tag">Hardware Integration</div>
+      <div class="skill-tag">Flight Testing & Iteration</div>
+    </div>
+
+    <!-- Bar chart of skill depth -->
+    <h3>Skill Depth Breakdown</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <div class="bar-label">Lua / Scripting API</div>
+        <div class="bar-track"><div class="bar-fill" style="width:92%; background: linear-gradient(90deg, #00d4ff, #0086aa);"></div></div>
+        <div class="bar-pct" style="color:#00d4ff">92%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">VTOL Control Logic</div>
+        <div class="bar-track"><div class="bar-fill" style="width:85%; background: linear-gradient(90deg, #ff6b2b, #a03000); animation-delay:0.1s"></div></div>
+        <div class="bar-pct" style="color:#ff6b2b">85%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">State Machine Design</div>
+        <div class="bar-track"><div class="bar-fill" style="width:88%; background: linear-gradient(90deg, #39ff6a, #009940); animation-delay:0.15s"></div></div>
+        <div class="bar-pct" style="color:#39ff6a">88%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Sensor Integration</div>
+        <div class="bar-track"><div class="bar-fill" style="width:75%; background: linear-gradient(90deg, #ffcc00, #aa8800); animation-delay:0.2s"></div></div>
+        <div class="bar-pct" style="color:#ffcc00">75%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Safety / Fault Tolerance</div>
+        <div class="bar-track"><div class="bar-fill" style="width:90%; background: linear-gradient(90deg, #c060ff, #7000cc); animation-delay:0.25s"></div></div>
+        <div class="bar-pct" style="color:#c060ff">90%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">MAVLink / GCS Comms</div>
+        <div class="bar-track"><div class="bar-fill" style="width:70%; background: linear-gradient(90deg, #00d4ff, #0050aa); animation-delay:0.3s"></div></div>
+        <div class="bar-pct" style="color:#00d4ff">70%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Coordinate Mathematics</div>
+        <div class="bar-track"><div class="bar-fill" style="width:78%; background: linear-gradient(90deg, #ff6b2b, #aa2200); animation-delay:0.35s"></div></div>
+        <div class="bar-pct" style="color:#ff6b2b">78%</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ WHAT I LEARNED ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 10 — key learnings</div>
+    <h2>What I Learned</h2>
+
+    <div class="timeline">
+      <div class="tl-item">
+        <h4>Embedded Lua runs differently from desktop Lua</h4>
+        <p>The ArduPilot Lua sandbox exposes a limited, aviation-specific API. Learning which functions exist, when they return nil vs raising errors, and how to safely check return values was the biggest initial hurdle.</p>
+      </div>
+      <div class="tl-item">
+        <h4>Safety logic must be explicitly designed — it doesn't happen automatically</h4>
+        <p>A naive script that always descends will always land somewhere, but not reliably on target. The "freeze altitude" decision for every edge case (target lost, sensor lag, XY drift) had to be explicitly coded rather than assumed.</p>
+      </div>
+      <div class="tl-item">
+        <h4>500 ms target-lost hysteresis prevents false triggers</h4>
+        <p>Without the <code>last_seen_time</code> window, any momentary sensor glitch (a frame drop, brief occlusion) would immediately freeze altitude and interrupt the landing. The 500 ms window smooths this while remaining fast enough to react to real target loss.</p>
+      </div>
+      <div class="tl-item">
+        <h4>pcall is mandatory in a 10 Hz aviation loop</h4>
+        <p>If any Lua error occurs unprotected, the script silently dies and leaves the vehicle without override. Wrapping the entire update in <code>pcall</code> and logging errors means the loop always reschedules — even if one tick throws an exception.</p>
+      </div>
+      <div class="tl-item">
+        <h4>Gain tuning is as important as the algorithm itself</h4>
+        <p><code>PLND_XY_GAIN = 2.5</code> works well in light wind, but in gusty conditions it can cause overcorrection oscillations. Exposing it as a parameter rather than a hard-coded constant made field tuning possible without firmware reflashing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ ARCHITECTURE TREE ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 11 — code architecture</div>
+    <h2>Code Architecture Tree</h2>
+
+    <div class="flow-tree">
+<span class="ft-root">vtol_strict_landing.lua</span>
+│
+├── <span class="ft-yes">Constants & Mode IDs</span>
+│     ├── MODE_QLAND = 20
+│     ├── MODE_QLOITER = 19
+│     ├── AUX_PRECLOITER = 39
+│     └── ALT_THRESHOLD = 7.0 m
+│
+├── <span class="ft-yes">Parameter Registration</span>
+│     ├── param:add_table()  — register "PLND_" namespace
+│     ├── PLND_XY_GAIN       (idx 1, default 2.5)
+│     ├── PLND_DESCENT_RAD   (idx 2, default 0.35)
+│     └── PLND_LOST_HOLD     (idx 4, default 1)
+│
+├── <span class="ft-yes">update_target()</span>
+│     ├── precland:healthy()? → guard
+│     ├── precland:target_acquired() → update last_seen_time
+│     └── have_target = (millis - last_seen_time) &lt; 500
+│
+├── <span class="ft-yes">precision_landing_active()</span>
+│     ├── MODE_QLOITER → return precloiter_enabled
+│     └── else → quadplane:in_vtol_land_descent() OR MODE_QLAND
+│
+├── <span class="ft-yes">precloiter_check()</span>
+│     └── rc:get_aux_cached(39) → set precloiter_enabled flag
+│
+├── <span class="ft-yes">update()  — main 10 Hz loop</span>
+│     ├── Guard checks (enabled, active, altitude available)
+│     ├── update_target()
+│     ├── Phase 1 (alt &gt; 7m)
+│     │     ├── steer toward target if visible
+│     │     └── allow normal descent rate
+│     └── Phase 2 (alt ≤ 7m)
+│           ├── target lost → set_descent_rate(0)
+│           ├── XY correction always applied
+│           ├── centred (≤35cm) → set_descent_rate(FINAL_SPD)
+│           └── off-centre → set_descent_rate(0)
+│
+└── <span class="ft-yes">protected_wrapper()</span>
+      ├── pcall(update)
+      ├── error → log + retry in 1000ms
+      └── success → reschedule in 100ms (10 Hz)
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ TROUBLESHOOTING ══════════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">// 12 — troubleshooting</div>
+    <h2>Common Issues & Fixes</h2>
+
+    <div class="panel">
+      <h3>❌ Script not loading ("PLND: UPDATED 7m LOGIC LOADED" never appears)</h3>
+      <p>Check: <code>SCR_ENABLE = 1</code> and the file is at <code>/APM/scripts/vtol_strict_landing.lua</code> (not in a subdirectory). Also verify SD card is formatted FAT32 and the FC can read it (check for SD card errors in boot log).</p>
+    </div>
+
+    <div class="panel orange">
+      <h3>❌ PLND parameters don't appear after boot</h3>
+      <p>This usually means the script failed to execute (a Lua syntax error). Check the GCS log for <code>PLND ERROR:</code> messages. Also try increasing <code>SCR_HEAP_SIZE</code> — if the heap is too small the script fails silently.</p>
+    </div>
+
+    <div class="panel warn">
+      <h3>⚠ TARGET ACQUIRED never shows (sensor present, PLND_TYPE set)</h3>
+      <p>Verify the sensor is wired to the correct UART/I2C port and <code>PLND_TYPE</code> matches the sensor driver number exactly. Test the sensor in Mission Planner's Precision Landing live view. Some sensors also need <code>PLND_ORIENT</code> to match the camera mounting direction.</p>
+    </div>
+
+    <div class="panel green">
+      <h3>⚠ Aircraft oscillates at target instead of landing</h3>
+      <p>Reduce <code>PLND_XY_GAIN</code> to 1.5–2.0. The default 2.5 can overcorrect in windy conditions or if the sensor has latency. Also consider increasing <code>PLND_DESCENT_RAD</code> slightly to 0.5 m if targeting precision requirements allow it.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ FOOTER ══════════════ -->
+<footer>
+  <p>
+    <span>VTOL-Strict-Landing-LuaScript</span> &nbsp;·&nbsp;
+    ArduPilot QuadPlane &nbsp;·&nbsp;
+    Drop into <span>/APM/scripts/</span> and fly.
+  </p>
+  <p style="margin-top:10px">Built with precision. Lands with precision.</p>
+</footer>
+
+</body>
+</html>
